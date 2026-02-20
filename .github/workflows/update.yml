@@ -31,7 +31,7 @@ jobs:
         run: |
           useradd -m -G wheel builder
           echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
-          chown -R builder:builder ${{ github.workspace }}
+          chown -R builder:builder . 2>/dev/null || true
 
       - name: Run update script
         run: |
