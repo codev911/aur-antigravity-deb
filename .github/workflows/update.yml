@@ -1,0 +1,129 @@
+name: Update Package Version
+
+on:
+  schedule:
+    # Run every hour to check for updates
+    - cron: '0 * * * *'
+  workflow_dispatch:  # Allow manual trigger
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  update-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Run update script
+        run: |
+          chmod +x update.sh
+          ./update.sh
+        env:
+          MAINTAINER_NAME: codev911
+          MAINTAINER_EMAIL: codev911@mojosolid.dev
+
+      - name: Check for changes
+        id: git-check
+        run: |
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get new version
+        if: steps.git-check.outputs.has_changes == 'true'
+        id: get-version
+        run: |
+          version=$(grep "^pkgver=" PKGBUILD | cut -d'=' -f2)
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Commit and push changes
+        if: steps.git-check.outputs.has_changes == 'true'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add PKGBUILD .SRCINFO
+          git commit -m "upgpkg: ${{ steps.get-version.outputs.version }}-1: automatic update"
+          git push
+
+      - name: Create release tag
+        if: steps.git-check.outputs.has_changes == 'true'
+        run: |
+          git tag "v${{ steps.get-version.outputs.version }}"
+          git push origin "v${{ steps.get-version.outputs.version }}"
+
+  arch-test:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel jq
+
+      - name: Build package
+        run: |
+          makepkg -sf --noconfirm
+
+      - name: Install package
+        run: |
+          pacman -U --noconfirm antigravity-deb-*.pkg.tar.zst
+
+      - name: Verify installation
+        run: |
+          which antigravity
+          ls -la /usr/bin/antigravity
+          ls -la /usr/lib/antigravity/
+          test -f /usr/lib/antigravity/out/cli.js && echo "CLI found" || echo "CLI NOT FOUND"
+
+  aur-push:
+    needs: [update-and-build, arch-test]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version from PKGBUILD
+        id: get-version
+        run: |
+          version=$(grep "^pkgver=" PKGBUILD | cut -d'=' -f2)
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Checkout AUR repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.AUR_USERNAME }}/antigravity-deb
+          ref: master
+          path: aur
+          ssh-key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          ssh-key-known-hosts: aur.archlinux.org
+
+      - name: Copy PKGBUILD and .SRCINFO to AUR
+        run: |
+          cp PKGBUILD aur/
+          cp .SRCINFO aur/
+          cp antigravity-deb.sh aur/
+
+      - name: Commit and push to AUR
+        working-directory: aur
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add PKGBUILD .SRCINFO antigravity-deb.sh
+          git commit -m "upgpkg: ${{ steps.get-version.outputs.version }}-1: automatic update"
+          git push
