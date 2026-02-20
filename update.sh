@@ -126,6 +126,17 @@ detect_electron_version() {
     cd - > /dev/null
 }
 
+# Calculate launcher script checksum
+calculate_launcher_checksum() {
+    if [[ ! -f "antigravity-deb.sh" ]]; then
+        log_error "Launcher script not found: antigravity-deb.sh"
+        exit 1
+    fi
+
+    _launcher_sha256=$(sha256sum "antigravity-deb.sh" | awk '{print $1}')
+    log_info "Launcher script SHA256: ${_launcher_sha256}"
+}
+
 # Generate updated PKGBUILD
 generate_pkgbuild() {
     log_info "Generating PKGBUILD..."
@@ -151,7 +162,7 @@ options=(!strip !debug)
 source=($pkgname.sh)
 source_aarch64=("Antigravity-$pkgver-aarch64.deb::https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev/pool/antigravity-debian/antigravity_$pkgver-${_arm64minor}_arm64_${_arm64check}.deb")
 source_x86_64=("Antigravity-$pkgver-x86_64.deb::https://us-central1-apt.pkg.dev/projects/antigravity-auto-updater-dev/pool/antigravity-debian/antigravity_$pkgver-${_x86minor}_amd64_${_x86check}.deb")
-sha256sums=('d3f365e6796836980a1439fb78be5cbfe1e11767fbd98fe695d3a953426d038b')
+sha256sums=('@SHA256LAUNCHER@')
 sha256sums_aarch64=('@SHA256AARCH64@')
 sha256sums_x86_64=('@SHA256X86_64@')
 
@@ -168,8 +179,14 @@ prepare() {
     fi
 
     # Specify electron version in launcher (lib path stays /usr/lib/antigravity)
-    sed -i "s|@ELECTRON@|$_electron|g" "$srcdir/$pkgname.sh"
-    sed -i "s|@LIB_PATH@|/usr/lib/antigravity|g" "$srcdir/$pkgname.sh"
+    sed -i "s|@ELECTRON@|$_electron|g" "$srcdir/$pkgname.sh" || {
+        echo "Error: Failed to replace @ELECTRON@ in launcher script"
+        return 1
+    }
+    sed -i "s|@LIB_PATH@|/usr/lib/antigravity|g" "$srcdir/$pkgname.sh" || {
+        echo "Error: Failed to replace @LIB_PATH@ in launcher script"
+        return 1
+    }
 
     sed -i 's|/usr/share/antigravity/antigravity|/usr/bin/antigravity|g' usr/share/applications/*.desktop
 }
@@ -208,6 +225,7 @@ PKGEOF
     sed -i "s|@X86CHECK@|$_x86check|g" PKGBUILD
     sed -i "s|@ARM64CHECK@|$_arm64check|g" PKGBUILD
     sed -i "s|@ELECTRON@|$_electron|g" PKGBUILD
+    sed -i "s|@SHA256LAUNCHER@|$_launcher_sha256|g" PKGBUILD
     sed -i "s|@SHA256AARCH64@|$sha256sums_aarch64|g" PKGBUILD
     sed -i "s|@SHA256X86_64@|$sha256sums_x86_64|g" PKGBUILD
 
@@ -240,6 +258,7 @@ main() {
     fetch_version_info
     calculate_checksums
     detect_electron_version
+    calculate_launcher_checksum
     generate_pkgbuild
     update_srcinfo
 

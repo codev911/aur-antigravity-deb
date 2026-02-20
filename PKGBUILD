@@ -35,7 +35,7 @@ prepare() {
     fi
 
     # Specify electron version in launcher (lib path stays /usr/lib/antigravity)
-    sed -i "s|electron39|$_electron|g" "$srcdir/$pkgname.sh"
+    sed -i "s|@ELECTRON@|$_electron|g" "$srcdir/$pkgname.sh"
     sed -i "s|@LIB_PATH@|/usr/lib/antigravity|g" "$srcdir/$pkgname.sh"
 
     sed -i 's|/usr/share/antigravity/antigravity|/usr/bin/antigravity|g' usr/share/applications/*.desktop
