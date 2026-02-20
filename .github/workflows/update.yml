@@ -2,9 +2,8 @@ name: Update Package Version
 
 on:
   schedule:
-    # Run every hour to check for updates
     - cron: '0 * * * *'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
   push:
     branches: [main]
 
@@ -20,19 +19,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
+      - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git jq curl
+          pacman -S --noconfirm base-devel git jq curl sudo
 
       - name: Create build user
         run: |
           useradd -m -G wheel builder
           echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+          chown -R builder:builder $GITHUB_WORKSPACE
 
       - name: Run update script
         run: |
-          su builder -c './update.sh'
+          sudo -u builder ./update.sh
         env:
           MAINTAINER_NAME: codev911
           MAINTAINER_EMAIL: codev911@mojosolid.dev
@@ -76,19 +76,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
+      - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel jq
+          pacman -S --noconfirm base-devel jq sudo
 
       - name: Create build user
         run: |
           useradd -m -G wheel builder
           echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+          chown -R builder:builder $GITHUB_WORKSPACE
 
       - name: Build package
         run: |
-          su builder -c 'makepkg -sf --noconfirm'
+          sudo -u builder makepkg -sf --noconfirm
 
       - name: Install package
         run: |
@@ -97,9 +98,7 @@ jobs:
       - name: Verify installation
         run: |
           which antigravity
-          ls -la /usr/bin/antigravity
-          ls -la /usr/lib/antigravity/
-          test -f /usr/lib/antigravity/out/cli.js && echo "CLI found" || echo "CLI NOT FOUND"
+          test -f /usr/lib/antigravity/out/cli.js && echo "OK" || exit 1
 
   aur-push:
     needs: [update-and-build, arch-test]
@@ -116,7 +115,7 @@ jobs:
           pacman -Syu --noconfirm
           pacman -S --noconfirm git openssh
 
-      - name: Get version from PKGBUILD
+      - name: Get version
         id: get-version
         run: |
           version=$(grep "^pkgver=" PKGBUILD | cut -d'=' -f2)
@@ -129,19 +128,11 @@ jobs:
           chmod 600 ~/.ssh/aur.key
           ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts
 
-      - name: Clone AUR repo
+      - name: Clone and push to AUR
         run: |
           git clone ssh://aur@aur.archlinux.org/antigravity-deb.git aur
-
-      - name: Copy files to AUR
-        run: |
-          cp PKGBUILD aur/
-          cp .SRCINFO aur/
-          cp antigravity-deb.sh aur/
-
-      - name: Commit and push to AUR
-        working-directory: aur
-        run: |
+          cp PKGBUILD .SRCINFO antigravity-deb.sh aur/
+          cd aur
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add PKGBUILD .SRCINFO antigravity-deb.sh
