@@ -113,28 +113,32 @@ jobs:
       - name: Install dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm git openssh
+          pacman -S --noconfirm git openssh base-devel
 
-      - name: Get version
-        id: get-version
+      - name: Install aurpublish
         run: |
-          version=$(grep "^pkgver=" PKGBUILD | cut -d'=' -f2)
-          echo "version=$version" >> $GITHUB_OUTPUT
+          git clone https://aur.archlinux.org/aurpublish.git
+          cd aurpublish
+          makepkg -si --noconfirm
+          cd ..
+          rm -rf aurpublish
 
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/aur.key
-          chmod 600 ~/.ssh/aur.key
-          ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts
+          chmod 700 ~/.ssh
+          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan aur.archlinux.org > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
-      - name: Clone and push to AUR
+      - name: Configure git
         run: |
-          git clone ssh://aur@aur.archlinux.org/antigravity-deb.git aur
-          cp PKGBUILD .SRCINFO antigravity-deb.sh aur/
-          cd aur
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add PKGBUILD .SRCINFO antigravity-deb.sh
-          git commit -m "upgpkg: ${{ steps.get-version.outputs.version }}-1: automatic update"
-          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur.key" git push
+          git config --global user.name "codev911"
+          git config --global user.email "codev911@mojosolid.dev"
+
+      - name: Submit to AUR with aurpublish
+        run: |
+          aurpublish -d . antigravity-deb
+        env:
+          AUR_PUBLISH_FORCE: 1
