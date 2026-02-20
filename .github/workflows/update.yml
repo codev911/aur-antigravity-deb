@@ -2,7 +2,7 @@ name: Update Package Version
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 */4 * * *'
   workflow_dispatch:
   push:
     branches: [main]
@@ -109,11 +109,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Publish to AUR
-        uses: TBK/action-update-aur-package@v3
+        uses: KSXGitHub/github-actions-deploy-aur@v4
         with:
-          package_name: antigravity-deb
-          commit_email: ${{ secrets.AUR_EMAIL }}
+          pkgname: antigravity-deb
+          pkgbuild: ./PKGBUILD
           commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           ssh_keyscan_types: rsa,ed25519
-          push_fail_error: false
+          push_fail_on_error: false
