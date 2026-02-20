@@ -125,10 +125,25 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan aur.archlinux.org > ~/.ssh/known_hosts
+
+          # Save private key
+          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+
+          # Create SSH config
+          cat > ~/.ssh/config <<EOF
+          Host aur.archlinux.org
+              User aur
+              IdentityFile ~/.ssh/aur
+          EOF
+          chmod 644 ~/.ssh/config
+
+          # Add AUR to known_hosts
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
+
+          # Test connection
+          ssh -T aur@aur.archlinux.org || true
 
       - name: Clone AUR repo
         run: |
@@ -142,6 +157,12 @@ jobs:
 
       - name: Push to AUR
         working-directory: aur
+        run: |
+          git config user.name "codev911"
+          git config user.email "codev911@mojosolid.dev"
+          git add PKGBUILD .SRCINFO antigravity-deb.sh
+          git diff --staged --quiet || git commit -m "upgpkg: ${{ steps.get-version.outputs.version }}-1: automatic update"
+          git push
         run: |
           git config user.name "codev911"
           git config user.email "codev911@mojosolid.dev"
