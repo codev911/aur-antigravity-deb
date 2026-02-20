@@ -14,19 +14,25 @@ permissions:
 jobs:
   update-and-build:
     runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel git jq curl
+
+      - name: Create build user
+        run: |
+          useradd -m -G wheel builder
+          echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
 
       - name: Run update script
         run: |
-          chmod +x update.sh
-          ./update.sh
+          su builder -c './update.sh'
         env:
           MAINTAINER_NAME: codev911
           MAINTAINER_EMAIL: codev911@mojosolid.dev
@@ -75,9 +81,14 @@ jobs:
           pacman -Syu --noconfirm
           pacman -S --noconfirm base-devel jq
 
+      - name: Create build user
+        run: |
+          useradd -m -G wheel builder
+          echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+
       - name: Build package
         run: |
-          makepkg -sf --noconfirm
+          su builder -c 'makepkg -sf --noconfirm'
 
       - name: Install package
         run: |
@@ -93,10 +104,17 @@ jobs:
   aur-push:
     needs: [update-and-build, arch-test]
     runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm git openssh
 
       - name: Get version from PKGBUILD
         id: get-version
@@ -104,16 +122,18 @@ jobs:
           version=$(grep "^pkgver=" PKGBUILD | cut -d'=' -f2)
           echo "version=$version" >> $GITHUB_OUTPUT
 
-      - name: Checkout AUR repo
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ secrets.AUR_USERNAME }}/antigravity-deb
-          ref: master
-          path: aur
-          ssh-key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          ssh-key-known-hosts: aur.archlinux.org
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/aur.key
+          chmod 600 ~/.ssh/aur.key
+          ssh-keyscan -H aur.archlinux.org >> ~/.ssh/known_hosts
 
-      - name: Copy PKGBUILD and .SRCINFO to AUR
+      - name: Clone AUR repo
+        run: |
+          git clone ssh://aur@aur.archlinux.org/antigravity-deb.git aur
+
+      - name: Copy files to AUR
         run: |
           cp PKGBUILD aur/
           cp .SRCINFO aur/
@@ -126,4 +146,4 @@ jobs:
           git config user.email "actions@github.com"
           git add PKGBUILD .SRCINFO antigravity-deb.sh
           git commit -m "upgpkg: ${{ steps.get-version.outputs.version }}-1: automatic update"
-          git push
+          GIT_SSH_COMMAND="ssh -i ~/.ssh/aur.key" git push
