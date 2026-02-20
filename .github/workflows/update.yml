@@ -103,65 +103,17 @@ jobs:
   aur-push:
     needs: [update-and-build, arch-test]
     runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm git openssh
-
-      - name: Get version
-        id: get-version
-        run: |
-          version=$(grep "^pkgver=" PKGBUILD | cut -d'=' -f2)
-          echo "version=$version" >> $GITHUB_OUTPUT
-
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-
-          # Save private key
-          echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/aur
-          chmod 600 ~/.ssh/aur
-
-          # Create SSH config
-          cat > ~/.ssh/config <<'EOF'
-          Host aur.archlinux.org
-              User aur
-              IdentityFile ~/.ssh/aur
-              StrictHostKeyChecking no
-          EOF
-          chmod 644 ~/.ssh/config
-
-          # Debug: show files
-          echo "=== Config ==="
-          cat ~/.ssh/config
-          echo "=== Key exists ==="
-          ls -la ~/.ssh/aur
-          echo "=== Test SSH ==="
-          ssh -o BatchMode=yes -o ConnectTimeout=10 aur@aur.archlinux.org echo "SSH connected" || echo "SSH failed"
-
-      - name: Clone AUR repo
-        run: |
-          git clone ssh://aur@aur.archlinux.org/antigravity-deb.git aur
-
-      - name: Copy files to AUR
-        run: |
-          cp PKGBUILD aur/
-          cp .SRCINFO aur/
-          cp antigravity-deb.sh aur/
-
-      - name: Push to AUR
-        working-directory: aur
-        run: |
-          git config user.name "codev911"
-          git config user.email "codev911@mojosolid.dev"
-          git add PKGBUILD .SRCINFO antigravity-deb.sh
-          git diff --staged --quiet || git commit -m "upgpkg: ${{ steps.get-version.outputs.version }}-1: automatic update"
-          git push
+      - name: Publish to AUR
+        uses: TBK/action-update-aur-package@v3
+        with:
+          package_name: antigravity-deb
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          ssh_keyscan_types: rsa,ed25519
+          push_fail_error: false
