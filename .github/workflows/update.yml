@@ -15,6 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,7 +31,7 @@ jobs:
         run: |
           useradd -m -G wheel builder
           echo '%wheel ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
-          chown -R builder:builder $GITHUB_WORKSPACE
+          chown -R builder:builder ${{ github.workspace }}
 
       - name: Run update script
         run: |
@@ -41,7 +44,6 @@ jobs:
         id: git-check
         shell: bash
         run: |
-          cd "${GITHUB_WORKSPACE}" || true
           if [[ -n "$(git status --porcelain)" ]]; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
           else
