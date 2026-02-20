@@ -23,7 +23,7 @@ Modified AUR package for [Antigravity](https://antigravity.google/) - Google's a
    makepkg -si
    ```
 
-### From AUR (if published)
+### From AUR
 
 ```bash
 paru -S antigravity-deb
