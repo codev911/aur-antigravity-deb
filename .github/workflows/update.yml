@@ -125,17 +125,27 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
+
+          # Save private key
           echo "${{ secrets.AUR_SSH_PRIVATE_KEY }}" > ~/.ssh/aur
           chmod 600 ~/.ssh/aur
+
+          # Create SSH config
           cat > ~/.ssh/config <<'EOF'
           Host aur.archlinux.org
               User aur
               IdentityFile ~/.ssh/aur
+              StrictHostKeyChecking no
           EOF
           chmod 644 ~/.ssh/config
-          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-          ssh -T aur@aur.archlinux.org || true
+
+          # Debug: show files
+          echo "=== Config ==="
+          cat ~/.ssh/config
+          echo "=== Key exists ==="
+          ls -la ~/.ssh/aur
+          echo "=== Test SSH ==="
+          ssh -o BatchMode=yes -o ConnectTimeout=10 aur@aur.archlinux.org echo "SSH connected" || echo "SSH failed"
 
       - name: Clone AUR repo
         run: |
