@@ -1,7 +1,7 @@
 pkgbase = antigravity-deb
 	pkgdesc = An agentic development platform from Google, evolving the IDE into the agent-first era.
 	pkgver = 1.18.3
-	pkgrel = 1
+	pkgrel = 2
 	url = https://antigravity.google/
 	arch = aarch64
 	arch = x86_64
