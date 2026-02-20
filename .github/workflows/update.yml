@@ -129,4 +129,3 @@ jobs:
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           ssh_keyscan_types: rsa,ed25519
-          push_fail_on_error: false
